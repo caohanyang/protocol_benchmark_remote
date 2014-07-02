@@ -16,12 +16,12 @@ public abstract class ExperimentServer implements Command {
     public boolean startCommand() {
     	startTime = System.currentTimeMillis();
         // start sar
-    	Boolean isStart=launchSar(properties);
-    	String exeCommand="java -DserverAddress="+properties.getProperty("serverAddress")+" -Dtype="+this.getName()+
+    	Boolean isStart = launchSar(properties);
+    	String exeCommand = "java -DserverAddress="+properties.getProperty("serverAddress")+" -Dtype="+this.getName()+
     			" -DclientNumber="+properties.getProperty("clientNumber")+" -DthreadNumber="+properties.getProperty("threadNumber")+
     			" -DmessageNumber="+properties.getProperty("messageNumber")+" -DmessageSize="+properties.getProperty("messageSize")+
     			" -DbufferSize="+properties.getProperty("bufferSize")+" com.cao.io.StartServer1 & ";
-    	if(isStart){
+    	if (isStart) {
     		return launchServer(exeCommand); // if that is false we should shutdown sar
     	}else{
     		//kill the sar
@@ -44,25 +44,28 @@ public abstract class ExperimentServer implements Command {
 
     @Override
     public String getReply() {
-    	String reply="type="+this.getName()+",time="+System.currentTimeMillis()+"\n";		
+    	String reply = "type="+this.getName()+","+properties.toString().substring(1, properties.toString().length()-1).replaceAll(" ", "")
+    			+",replyTime="+System.currentTimeMillis()+"\n";		
 		return reply;
 	}
     
     @Override
     public String getResult() {
-    	String reply="type="+this.getName()+",cpu="+cpu+",costTime="+Long.toString(stopTime - startTime)+",time="+System.currentTimeMillis()+"\n";	
+    	String reply = "type="+this.getName()+",cpu="+cpu
+    			+","+properties.toString().substring(1, properties.toString().length()-1).replaceAll(" ", "")
+    			+",replyTime="+System.currentTimeMillis()+"\n";	
 		return reply;
 	}
     
     public void readTextFile(String filePath){
 		
 		try {
-			File file=new File(filePath);
-			if(file.isFile()&&file.exists()){
-				BufferedReader reader=new BufferedReader(new FileReader(file));
-				String row=null;
-				while((row=reader.readLine())!=null){
-					cpu=row;
+			File file = new File(filePath);
+			if (file.isFile() && file.exists()) {
+				BufferedReader reader = new BufferedReader(new FileReader(file));
+				String row = null;
+				while((row = reader.readLine()) != null){
+					cpu = row;
 				}
 			}
 		} catch (IOException e) {
@@ -71,10 +74,10 @@ public abstract class ExperimentServer implements Command {
 	}
     
     public int executeStript(File scriptFile) {
-		int r=-1;
+		int r = -1;
 		try {			   	
 			//make the script executable
-			Process p=Runtime.getRuntime().exec("chmod +x "+scriptFile.getAbsolutePath());
+			Process p = Runtime.getRuntime().exec("chmod +x "+scriptFile.getAbsolutePath());
 			r = p.waitFor();
 			p = Runtime.getRuntime().exec(scriptFile.getAbsolutePath());
 			r = p.waitFor();

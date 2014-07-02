@@ -8,6 +8,7 @@ import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.util.List;
 import java.util.Properties;
 
 public class Slave extends BenchmarkUnit{
@@ -18,7 +19,7 @@ public class Slave extends BenchmarkUnit{
 	public SocketChannel socket;
 
 	public static void main(String[] args) {
-		Slave slave = new Slave(System.getProperty("address").trim());
+		Slave slave = new Slave(System.getProperty("slaveAddress").trim());
 		try {
 			slave.start(null);
 		} catch (Exception e) {
@@ -54,6 +55,7 @@ public class Slave extends BenchmarkUnit{
 		while (true) {
 			try {
 				socket = server.accept();
+//				System.out.println("Accept new Socket");
 			} catch (Exception e1) {
 			}
 			try {
@@ -72,7 +74,7 @@ public class Slave extends BenchmarkUnit{
 	@Override
 	boolean commandComplete(SocketChannel socket, String receivedString)
 			throws Exception {
-		if(receivedString.endsWith("\n")) {
+		if (receivedString.endsWith("\n")) {
 			// execute the command
 			String response = executeCommand(receivedString);
 
@@ -181,5 +183,10 @@ public class Slave extends BenchmarkUnit{
 			e.printStackTrace();
 		}
 		return false;
+	}
+
+	@Override
+	List<String> getResultList() {
+		return null;
 	}
 }

@@ -8,16 +8,16 @@ import java.util.Properties;
 
 public class ExperimentFuture extends ExperimentServer {
 	public ExperimentFuture(Properties p) {
-		properties=p;
+		properties = p;
 	}
 
 	@Override
 	boolean launchServer(String command) {
 		int r;
         // generate a script file containing the command
-    	final File scriptFile=new File(basePath+"/"+date+"/command.sh");
+    	final File scriptFile = new File(basePath+"/"+date+"/command.sh");
     	try {
-	    	PrintWriter w=new PrintWriter(scriptFile);
+	    	PrintWriter w = new PrintWriter(scriptFile);
 	    	w.println("#!/bin/sh");
 	    	w.println("cd "+basePath+"/bin");
 	    	w.println(command);
@@ -26,7 +26,7 @@ public class ExperimentFuture extends ExperimentServer {
 			e.printStackTrace();
 		}
     	//make the script executable
-    	r=executeStript(scriptFile);
+    	r = executeStript(scriptFile);
                    
         stopTime = System.currentTimeMillis();
         return r == 0;
@@ -36,7 +36,7 @@ public class ExperimentFuture extends ExperimentServer {
 	boolean killServer(Properties props) {
 		int r;
         try {
-        	String exeCommand="ps -ef|grep java|grep com.cao.io.StartServer1|awk '{print $2}'|xargs -n 1 -r kill -9 ";
+        	String exeCommand = "ps -ef|grep java|grep com.cao.io.StartServer1|awk '{print $2}'|xargs -n 1 -r kill -9 ";
             
             Process p = Runtime.getRuntime().exec(new String[]{"/bin/sh","-c",exeCommand});
             r = p.waitFor();
@@ -51,18 +51,18 @@ public class ExperimentFuture extends ExperimentServer {
 	boolean launchSar(Properties props) {
 		int r;
         try {        	
-        	String sarCommand="sar -o test.sar -p 1 >/dev/null 2>&1 & ";
+        	String sarCommand = "sar -o test.sar -p 1 >/dev/null 2>&1 & ";
             
         	// generate a script file containing the command
-        	final File scriptFile=new File(basePath+"/"+date+"/sarStart.sh");
-        	PrintWriter w=new PrintWriter(scriptFile);
+        	final File scriptFile = new File(basePath+"/"+date+"/sarStart.sh");
+        	PrintWriter w = new PrintWriter(scriptFile);
         	w.println("#!/bin/sh");
         	w.println("cd "+basePath+"/"+date);
         	w.println(sarCommand);
         	w.close();
         	
         	//make the script executable
-        	r=executeStript(scriptFile);
+        	r = executeStript(scriptFile);
             
         } catch (IOException e) {
             e.printStackTrace();
@@ -75,13 +75,13 @@ public class ExperimentFuture extends ExperimentServer {
 	boolean getherSar(Properties props) {
 		int r;
         try {    
-        	String killSar="ps -ef|grep sar|awk '{print $2}'|xargs -n 1 -r kill -9";
-        	String sarResult="sar -p -f test.sar |grep Average|awk '{print $3}' >"+basePath+"/"+date+"/cpu.txt";
+        	String killSar = "ps -ef|grep sar|awk '{print $2}'|xargs -n 1 -r kill -9";
+        	String sarResult = "sar -p -f test.sar |grep Average|awk '{print $3}' >"+basePath+"/"+date+"/cpu.txt";
         	//System.out.println(exeCommand);
             
         	// generate a script file containing the command
-        	final File scriptFile=new File(basePath+"/"+date+"/sarEnd.sh");
-        	PrintWriter w=new PrintWriter(scriptFile);
+        	final File scriptFile = new File(basePath+"/"+date+"/sarEnd.sh");
+        	PrintWriter w = new PrintWriter(scriptFile);
         	w.println("#!/bin/sh");
         	w.println("cd "+basePath+"/"+date);     	
         	w.println(sarResult);
@@ -90,7 +90,7 @@ public class ExperimentFuture extends ExperimentServer {
         	w.close();
         	
         	//make the script executable
-        	r=executeStript(scriptFile);
+        	r = executeStript(scriptFile);
             
             //get the cpu result from the txt
             readTextFile(basePath+"/"+date+"/cpu.txt");
