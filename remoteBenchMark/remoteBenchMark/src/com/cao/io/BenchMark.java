@@ -3,6 +3,7 @@ package com.cao.io;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,36 +16,33 @@ public class BenchMark {
     public List<String> typeList = null;
     public Map<String, int[]> variableMap = null;
     public String basePath = "/home/server/software/BenchMark";
-    public int repeatTimes = Integer.getInteger("repeatTimes", 2);
+    public int repeatTimes = Integer.getInteger("repeatTimes", 20);
     public String date = "0617";
 	public int[] variable;
     
 	public static void main(String[] args) {
 		BenchMark benchMark = new BenchMark();
 		benchMark.prepareVariable();
-		benchMark.experiment("messageSize");  
+		//Experiment: message size change
+		benchMark.experiment("messageSize"); 
+		
+		//Experiment: thread number change
 		//benchMark.experiment("threadNumber"); 
 	}
     
 
 	public void prepareVariable() {
 		
-		typeList = new ArrayList<String>();
-		typeList.add("com.cao.io.ExperimentSynchronous");
-		typeList.add("com.cao.io.ExperimentAsynchronous");
-		typeList.add("com.cao.io.ExperimentFuture");
-		
-		int[] messageSize = new int[]{64,256,1024,4096,8192};
-		int[] threadNumber = new int[]{1,10,100};
-		int[] clientNumber = new int[]{1,10,100};
-		int[] messageNumber = new int[]{1,10,100};
+		//prepare some variables for the Experiment
+		typeList = new ArrayList<String>(Arrays.asList("com.cao.io.SynchronousCommand","com.cao.io.AsynchronousCommand","com.cao.io.FutureCommand"));
 		
 		variableMap = new HashMap<String, int[]>();
-		variableMap.put("messageSize", messageSize);
-		variableMap.put("threadNumber", threadNumber);
-		variableMap.put("clientNumber", clientNumber);
-		variableMap.put("messageNumber", messageNumber);
+		variableMap.put("messageSize", new int[]{64,256,1024,4096,8192});
+		variableMap.put("threadNumber", new int[]{1,10,100});
+		variableMap.put("clientNumber", new int[]{1,10,100});
+		variableMap.put("messageNumber", new int[]{1,10,100});
 		
+		//get the default properties.
 		properties = getDefaultProperties();
 	}
 
@@ -53,7 +51,9 @@ public class BenchMark {
 		final BenchmarkUnit master = new Master(System.getProperty("slaveAddress1").trim(),System.getProperty("slaveAddress2").trim());
        
 		try {
+			//start the master
 			startMaster(master, testVariable);
+			//handle the result : Throughput, Cpu...
 			handleResult(master);
   		} catch (Exception e) {
   			System.err.println("Can't start the thread ... ");
@@ -61,9 +61,11 @@ public class BenchMark {
 	}
 
 	public void startMaster(BenchmarkUnit master, String testVariable) throws Exception {
+		//get the variable which need to test. (Message size, Throughput...)
 		variable = variableMap.get(testVariable);
+		
+		//repeat the experiment many times.
 		for (int t = 1; t <= repeatTimes; t++) {
-			
 			for (int j = 0; j < variable.length; j++) {
 				switch (testVariable) {
 				case "messageSize":
@@ -78,6 +80,8 @@ public class BenchMark {
 				properties.put("times", t);
 				for (int i = 0; i < typeList.size(); i++) {
 					properties.put("slaveType1", typeList.get(i));
+					
+					//start the master
 					master.start(properties);
 				}
 			 }
@@ -102,13 +106,14 @@ public class BenchMark {
 		List<String> throughputList = new ArrayList<String>();
 		List<String> cpuList = new ArrayList<String>();
 		List<String> costTimeList = new ArrayList<String>();	
+		
 		for (String result : resultList) {
-			
 			System.out.println(result);
 			String action = result.split(" ")[0].trim();
 			
 			if ("OK".equals(action)) {
 				String parameters = result.split(" ")[1].trim();
+				//parse the value from the result
 				String throughput = getValue(parameters, "throughput");
 				String messageSize = getValue(parameters, "messageSize");	
 				String cpu = getValue(parameters, "cpu");	
@@ -121,11 +126,11 @@ public class BenchMark {
 			}
 		}
 		
+		//write the result to the csv file
 		writeFile(throughputList, "Throughput");
 		writeFile(cpuList, "Cpu");
 		writeFile(costTimeList, "CostTime");
 	}
-
 
 	public String getValue(String parameters, String str) {
 		int index = parameters.indexOf(str);
@@ -134,8 +139,9 @@ public class BenchMark {
 	}
 	
 	private void writeFile(List<String> list, String str){
+		// handle the string
 		for (String type : typeList) {
-			String symbol = type.charAt(21) + "-";
+			String symbol = type.charAt(11) + "-";
 			String fileName = basePath + "/" + date + "/" + symbol + str + ".csv";
 			List<String> resultList = new ArrayList<String>();
 			String record = null;
@@ -149,6 +155,7 @@ public class BenchMark {
 					record = null;
 				}
 			}
+			//write CSV
 			writeCSV(fileName, resultList);
 		}
 	}

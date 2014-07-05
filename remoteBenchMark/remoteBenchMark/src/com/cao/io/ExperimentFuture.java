@@ -1,108 +1,117 @@
 package com.cao.io;
 
-import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.util.Properties;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.StandardSocketOptions;
+import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousServerSocketChannel;
+import java.nio.channels.AsynchronousSocketChannel;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
-public class ExperimentFuture extends ExperimentServer {
-	public ExperimentFuture(Properties p) {
-		properties = p;
-	}
-
+public class ExperimentFuture extends ExperimentServer <AsynchronousServerSocketChannel,AsynchronousSocketChannel>{
 	@Override
-	boolean launchServer(String command) {
-		int r;
-        // generate a script file containing the command
-    	final File scriptFile = new File(basePath+"/"+date+"/command.sh");
-    	try {
-	    	PrintWriter w = new PrintWriter(scriptFile);
-	    	w.println("#!/bin/sh");
-	    	w.println("cd "+basePath+"/bin");
-	    	w.println(command);
-	    	w.close();
-    	} catch (FileNotFoundException e) {
+	public void listen() {
+		// create the thread pool
+		ExecutorService taskExecutor = Executors.newFixedThreadPool(THREAD_NUMBER,Executors.defaultThreadFactory());  
+		//open and bind
+		String arg[] = SERVER_ADDRESS.split(":");
+		InetSocketAddress address = new InetSocketAddress(arg[0].trim(),Integer.parseInt(arg[1].trim()));
+		try {			
+			
+			try {
+				server=AsynchronousServerSocketChannel.open();
+			} catch (Exception e) {
+				System.out.println("Cannot open the server");
+				System.exit(0);
+			}
+			//set some options
+			try {
+				server.setOption(StandardSocketOptions.SO_REUSEADDR, true);
+			} catch (Exception e) {
+				System.out.println("Cannot set the reuse address");
+				System.exit(0);
+			}
+			try {
+				server.setOption(StandardSocketOptions.SO_RCVBUF, BUFFER_SIZE*MESSAGE_NUMBER);
+			} catch (Exception e) {
+				System.out.println("Cannot set the reveive buff");
+				System.exit(0);
+			}	
+			try {
+				server.bind(address,THREAD_NUMBER); //backlog=100
+			} catch (Exception e) {
+				System.out.println("Cannot bind the address");
+				System.exit(0);
+			}
+			
+			//System.out.println("AsynchronousServer:waiting for connection...");  
+			while(true){			
+				try {
+					//get the socket
+					Future<AsynchronousSocketChannel> asynchronousSocketChannelFuture=server.accept();
+					final AsynchronousSocketChannel asynchronousSocketChannel = asynchronousSocketChannelFuture.get();
+					//System.out.println("FutrueServer:connect one client");
+					if(asynchronousSocketChannel==null){
+						break;
+					}else{
+						ServerWorker listener=new ServerWorker(asynchronousSocketChannel);
+						taskExecutor.execute(listener);
+					}
+				} catch (InterruptedException | ExecutionException e) {
+					e.printStackTrace();
+				} 				
+			}		  
+		} catch (Exception e) {
 			e.printStackTrace();
-		}
-    	//make the script executable
-    	r = executeStript(scriptFile);
-                   
-        stopTime = System.currentTimeMillis();
-        return r == 0;
+		}		
 	}
 
 	@Override
-	boolean killServer(Properties props) {
-		int r;
-        try {
-        	String exeCommand = "ps -ef|grep java|grep com.cao.io.StartServer1|awk '{print $2}'|xargs -n 1 -r kill -9 ";
-            
-            Process p = Runtime.getRuntime().exec(new String[]{"/bin/sh","-c",exeCommand});
-            r = p.waitFor();
-        } catch (InterruptedException | IOException e) {
-            e.printStackTrace();
-            return false;
-        }
-        return r == 137;   //kill: exit value==137
+	public void sendText(ByteBuffer writebuff, AsynchronousSocketChannel socket,int messageNow) {
+		try {
+			socket.write(writebuff).get();
+			//System.out.println("AsynchronousServerFuture:already send: "+i);
+			socket.close(); 
+            if (messageNow == MESSAGE_NUMBER) {
+				//socket.close();           //close the channel //TODO
+			}
+		} catch (InterruptedException | ExecutionException | IOException e) {
+			e.printStackTrace();
+		}	
 	}
-
+	
 	@Override
-	boolean launchSar(Properties props) {
-		int r;
-        try {        	
-        	String sarCommand = "sar -o test.sar -p 1 >/dev/null 2>&1 & ";
-            
-        	// generate a script file containing the command
-        	final File scriptFile = new File(basePath+"/"+date+"/sarStart.sh");
-        	PrintWriter w = new PrintWriter(scriptFile);
-        	w.println("#!/bin/sh");
-        	w.println("cd "+basePath+"/"+date);
-        	w.println(sarCommand);
-        	w.close();
-        	
-        	//make the script executable
-        	r = executeStript(scriptFile);
-            
-        } catch (IOException e) {
-            e.printStackTrace();
-            return false;
-        }
-        return r == 0;
+	public String receiveText(ByteBuffer readbuff,AsynchronousSocketChannel socket,int messageNow) {
+		//receive the message
+		String receivedString=null;
+		try {
+			readbuff.clear();
+			int num = 0,sum = 0;
+			while ((num = socket.read(readbuff).get()) >= 0|| readbuff.position() != 0) {
+				sum += num;
+				if (sum >= MESSAGE_SIZE + HTTP_HEAD) {
+					// get the final string
+					receivedString = receivedString
+							+ byteBufferToString(readbuff);
+					break;
+				} else {
+					if (readbuff.position() == readbuff.limit()) {
+						// add the string which received this time to the final
+						// string
+						receivedString = receivedString
+								+ byteBufferToString(readbuff);
+						readbuff.clear();
+					}
+				}
+			 }
+		} catch (InterruptedException | ExecutionException e) {		
+			e.printStackTrace();
+		}	
+		return receivedString;
 	}
-
-	@Override
-	boolean getherSar(Properties props) {
-		int r;
-        try {    
-        	String killSar = "ps -ef|grep sar|awk '{print $2}'|xargs -n 1 -r kill -9";
-        	String sarResult = "sar -p -f test.sar |grep Average|awk '{print $3}' >"+basePath+"/"+date+"/cpu.txt";
-        	//System.out.println(exeCommand);
-            
-        	// generate a script file containing the command
-        	final File scriptFile = new File(basePath+"/"+date+"/sarEnd.sh");
-        	PrintWriter w = new PrintWriter(scriptFile);
-        	w.println("#!/bin/sh");
-        	w.println("cd "+basePath+"/"+date);     	
-        	w.println(sarResult);
-        	w.println("rm "+basePath+"/"+date+"/test.sar");
-        	w.println(killSar);
-        	w.close();
-        	
-        	//make the script executable
-        	r = executeStript(scriptFile);
-            
-            //get the cpu result from the txt
-            readTextFile(basePath+"/"+date+"/cpu.txt");
-        } catch (IOException e) {
-            e.printStackTrace();
-            return false;
-        }
-        return r == 0;
-	}
-
-	@Override
-	public String getName() {
-		return "Future";
-	}
+	
 }

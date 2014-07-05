@@ -25,8 +25,8 @@ public class Master extends BenchmarkUnit {
 	}
 
 	public static void main(String[] args) {
-		Master master = new Master(System.getProperty("slaveAddress1").trim(),
-				System.getProperty("slaveAddress2").trim());
+		Master master = new Master(System.getProperty("slaveAddress1").trim(), System.getProperty("slaveAddress2").trim());
+		// start the master
 		try {
 			master.start(null);
 		} catch (Exception e) {
@@ -41,23 +41,28 @@ public class Master extends BenchmarkUnit {
 
 		String startCommand = "START " + "type=" + p.getProperty("slaveType1")+ "," + propertiesString + ",sendTime="+ System.currentTimeMillis() + "\n";
 		System.out.println(startCommand);
+		// connect one slave, send the start Server command
 		slave1 = connectSlave(address_1, startCommand);
 
 		String abCommand = "START " + "type=" + p.getProperty("slaveType2")+ "," + propertiesString + ",sendTime="+ System.currentTimeMillis() + "\n";
 		System.out.println(abCommand);
+		//connect the other slave, send the abCommand
 		slave2 = connectSlave(address_2, abCommand);
 		
 		String stopCommand = "STOP " + "type=" + p.getProperty("slaveType1")+ "," + propertiesString + ",sendTime="+ System.currentTimeMillis() + "\n";
 		System.out.println(stopCommand);
+		//send the stop Server command
 		handleCommand(slave1, stopCommand);
 		
+		//close the channel
 		closeChannel();
 	}
 
 	public SocketChannel connectSlave(InetSocketAddress address, String command)
 			throws Exception {
-
+        // connect the address
 		SocketChannel slave = connect(address);
+		// handle the command
 		handleCommand(slave, command);
 		return slave;
 	}
@@ -65,7 +70,7 @@ public class Master extends BenchmarkUnit {
 	public SocketChannel connect(InetSocketAddress address) throws Exception {
 
 		SocketChannel socket = null;
-
+        // open and bind
 		socket = SocketChannel.open();
 		try {
 			socket.setOption(StandardSocketOptions.SO_RCVBUF, BUFFER);
@@ -90,14 +95,14 @@ public class Master extends BenchmarkUnit {
 
 	public void handleCommand(SocketChannel socket, String command)
 			throws Exception {
-
+        //send and receive command
 		ByteBuffer commandBuffer = sendCommand(socket, command);
 		readCommand(socket);
 	}
 
 	@Override
-	boolean commandComplete(SocketChannel socket, String receivedString)
-			throws Exception {
+	boolean commandComplete(SocketChannel socket, String receivedString) throws Exception {
+		// test if the command complete
 		if (receivedString.endsWith("\n")) {
 			// handleResponse(receivedString);
 		    System.out.println(receivedString);
@@ -108,6 +113,7 @@ public class Master extends BenchmarkUnit {
 	}
 
 	void recordResult(String receivedString) {
+		//add the result to the list
 		resultList.add(receivedString);
 	}
 

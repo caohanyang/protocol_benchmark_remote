@@ -1,94 +1,134 @@
-package com.cao.io;
+ package com.cao.io;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
-import java.util.Properties;
+import java.nio.ByteBuffer;
+import java.nio.channels.NetworkChannel;
+import java.security.MessageDigest;
 
-public abstract class ExperimentServer implements Command {
+abstract public class ExperimentServer<S extends NetworkChannel,C extends NetworkChannel> {
+	public int BUFFER_SIZE = Integer.parseInt(System.getProperty("bufferSize").trim());
+	public int MESSAGE_SIZE = Integer.parseInt(System.getProperty("messageSize").trim());
+	public int MESSAGE_NUMBER = Integer.parseInt(System.getProperty("messageNumber").trim());
+	public int CLIENT_NUMBER = Integer.parseInt(System.getProperty("clientNumber").trim());
+	public int THREAD_NUMBER = Integer.parseInt(System.getProperty("threadNumber").trim());
+	public String SERVER_ADDRESS = System.getProperty("serverAddress").trim();
+	public int HTTP_HEAD = 159;  
+	protected S server;
+	abstract public void listen();
+	abstract public void sendText(ByteBuffer writebuff,C socket,int messageNow);
+	abstract public String receiveText(ByteBuffer readbuff,C socket,int messageNow);
+	
+	public static void main(String[] args) {
+		new Thread(new Runnable() {
+            @Override
+            public void run() {
+                newServer().listen();
+            }
+        }).start();
 
-	long startTime, stopTime;
-	String cpu,memory;
-    public Properties properties ;
-
-    @Override
-    public boolean startCommand() {
-    	startTime = System.currentTimeMillis();
-        // start sar
-    	Boolean isStart = launchSar(properties);
-    	String exeCommand = "java -DserverAddress="+properties.getProperty("serverAddress")+" -Dtype="+this.getName()+
-    			" -DclientNumber="+properties.getProperty("clientNumber")+" -DthreadNumber="+properties.getProperty("threadNumber")+
-    			" -DmessageNumber="+properties.getProperty("messageNumber")+" -DmessageSize="+properties.getProperty("messageSize")+
-    			" -DbufferSize="+properties.getProperty("bufferSize")+" com.cao.io.StartServer1 & ";
-    	if (isStart) {
-    		return launchServer(exeCommand); // if that is false we should shutdown sar
-    	}else{
-    		//kill the sar
-    	}
-        return false;
-    }
-
-    @Override
-    public boolean stopCommand() {
-        // gather sar results => fill properties
-    	getherSar(properties);
-        // kill server
-    	return killServer(properties); // if that is false we should shutdown sar
-    }
-    
-    abstract boolean launchServer(String command);
-    abstract boolean killServer(Properties props);
-    abstract boolean launchSar(Properties props);
-    abstract boolean getherSar(Properties props);
-
-    @Override
-    public String getReply() {
-    	String reply = "type="+this.getName()+","+properties.toString().substring(1, properties.toString().length()-1).replaceAll(" ", "")
-    			+",replyTime="+System.currentTimeMillis()+"\n";		
-		return reply;
 	}
+	
+	static ExperimentServer<?,?> newServer() {
+		String serverType=System.getProperty("type").trim();
+        if ("Synchronous".equalsIgnoreCase(serverType))    	
+            return new ExperimentSynchronous();
+        
+        else if ("Asynchronous".equalsIgnoreCase(serverType))
+        	return new ExperimentAsynchronous();
+        
+        else if ("Future".equalsIgnoreCase(serverType))
+        	return new ExperimentFuture();
+        
+        return null;
     
-    @Override
-    public String getResult() {
-    	String reply = "type="+this.getName()+",cpu="+cpu
-    			+","+properties.toString().substring(1, properties.toString().length()-1).replaceAll(" ", "")
-    			+",replyTime="+System.currentTimeMillis()+"\n";	
-		return reply;
-	}
+    }
+	
+	public void sendMessage(String receivedString,C socket,int messageNow) {
+        ByteBuffer writebuff = ByteBuffer.allocate(BUFFER_SIZE);
+        
+        //encode the string
+        String digest=encode("SHA1",receivedString);
+        
+        //System.out.println("digest"+digest.length());
+        String sendString="HTTP/1.1 200 OK\n" + "Date: Wed, 01 May 2013 15:46:04 GMT\n" + "Server: Apache/2.2.22 (Ubuntu)\n"+
+        "X-Powered-By: PHP/5.3.10-1ubuntu3.6\n" + "Vary: Accept-Encoding\n" + "Last-Modified: Wed, 01 May 2013 12:52:39 GMT\n"+
+        "Transfer-Encoding: chunked\n" + "Content-Type: text/xml; charset=UTF-8\n" + digest;
+        
+        writebuff=ByteBuffer.wrap(sendString.getBytes(), 0, sendString.length());
+        writebuff.limit(sendString.length());
+        writebuff.rewind();
+        
+        //send the string
+        sendText(writebuff,socket,messageNow);
+
+    }
     
-    public void readTextFile(String filePath){
+    public String receiveMessage(C socket,int messageNow){
 		
+    	//receive the message
+    	ByteBuffer readbuff = ByteBuffer.allocate(BUFFER_SIZE+HTTP_HEAD);
+
+    	String receivedString=receiveText(readbuff,socket,messageNow);
+        
+        return receivedString;
+    }
+    
+    public String byteBufferToString(ByteBuffer buffer){
+    	String str=new String(buffer.array(),0,buffer.limit());
+		return str;
+
+    }
+    
+    public String encode(String algorithm, String str) {
+    	// encode the string, use the SHA1
+		if (str == null) {
+			return null;
+		}
 		try {
-			File file = new File(filePath);
-			if (file.isFile() && file.exists()) {
-				BufferedReader reader = new BufferedReader(new FileReader(file));
-				String row = null;
-				while((row = reader.readLine()) != null){
-					cpu = row;
+			MessageDigest alga = MessageDigest.getInstance(algorithm);
+			alga.update(str.getBytes()); 
+			byte[] digesta = alga.digest();
+	            
+	        return byte2hex(digesta);
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+	}
+	
+	public String byte2hex(byte[] b) {
+		String hs = "";
+		String stmp = "";
+		for (int n = 0; n < b.length; n++) {
+			stmp = (java.lang.Integer.toHexString(b[n] & 0XFF));
+			if (stmp.length() == 1)
+				hs = hs + "0" + stmp;
+			else
+				hs = hs + stmp;
+			if (n < b.length - 1)
+				hs = hs + ":";
+		}
+		return hs.toUpperCase();
+	}
+	
+	public class ServerWorker implements Runnable{
+		public C socket=null;
+		public ServerWorker(C socket){
+			this.socket=socket;
+		}
+		@Override
+		public void run() {
+			
+			for(int i=1;i<=MESSAGE_NUMBER;i++){
+				
+				//receive message
+				String receivedString =receiveMessage(socket,i);
+				//send message
+				if(receivedString==null){				
+					 break;
+				}else{
+					sendMessage(receivedString,socket,i);	
 				}
 			}
-		} catch (IOException e) {
-			e.printStackTrace();
-		}		
+		}	
 	}
-    
-    public int executeStript(File scriptFile) {
-		int r = -1;
-		try {			   	
-			//make the script executable
-			Process p = Runtime.getRuntime().exec("chmod +x "+scriptFile.getAbsolutePath());
-			r = p.waitFor();
-			p = Runtime.getRuntime().exec(scriptFile.getAbsolutePath());
-			r = p.waitFor();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		return r;
-	}
-    
-    @Override
-    public boolean needStopCommand() {
-    	return true;
-    }
+	
 }

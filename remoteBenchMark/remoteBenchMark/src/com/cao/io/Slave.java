@@ -20,6 +20,7 @@ public class Slave extends BenchmarkUnit{
 
 	public static void main(String[] args) {
 		Slave slave = new Slave(System.getProperty("slaveAddress").trim());
+		// start he slave
 		try {
 			slave.start(null);
 		} catch (Exception e) {
@@ -47,6 +48,8 @@ public class Slave extends BenchmarkUnit{
 			System.err.println("Warning, Can't change the size of the receive buffer for "+ address);
 		}
 		server.bind(address);
+		
+		//accept socket and read buffer
 		handleSocket();
 	}
 
@@ -54,11 +57,12 @@ public class Slave extends BenchmarkUnit{
 	public void handleSocket() throws Exception {
 		while (true) {
 			try {
+				//accept the socket
 				socket = server.accept();
-//				System.out.println("Accept new Socket");
 			} catch (Exception e1) {
 			}
 			try {
+				//read command from the socket
 				readCommand(socket);
 			} catch (Exception e) {
 				System.err.println("Unable to handle request for " + socket+ ": " + e.getMessage());
@@ -67,6 +71,7 @@ public class Slave extends BenchmarkUnit{
 	}
 
 	public String byteBufferToString(ByteBuffer buffer) {
+		//transform the data from byte to String
 		String str = new String(buffer.array(), 0, buffer.position());
 		return str;
 	}
@@ -75,10 +80,11 @@ public class Slave extends BenchmarkUnit{
 	boolean commandComplete(SocketChannel socket, String receivedString)
 			throws Exception {
 		if (receivedString.endsWith("\n")) {
-			// execute the command
+			// The command is end, execute the command
 			String response = executeCommand(receivedString);
 
 //			System.out.println("response="+response);
+			//send the response back
 			sendCommand(socket, response);	
 			return true;
 		}

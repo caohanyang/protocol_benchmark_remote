@@ -8,7 +8,7 @@ import java.util.Properties;
 
 public abstract class BenchmarkUnit {
 	public static final int BUFFER = Integer.getInteger("buffersize", 1024);
-	
+
 	abstract boolean stopReceiveUnit();
 	abstract boolean closeChannel();
 	abstract void start(Properties properties) throws Exception;
@@ -17,6 +17,8 @@ public abstract class BenchmarkUnit {
 	
 	public static void main(String[] args) {
 		BenchmarkUnit unit = new Slave(System.getProperty("slaveAddress").trim());
+		
+		//start the unit
 		try {
 			unit.start(null);
 		} catch (Exception e) {
@@ -25,6 +27,7 @@ public abstract class BenchmarkUnit {
 	}
 	
 	public ByteBuffer sendCommand(SocketChannel socket, String command){
+		//send the command
 		if (socket != null) {
 			try {
 			  ByteBuffer commandBuffer = ByteBuffer.wrap(command.getBytes());
@@ -43,6 +46,7 @@ public abstract class BenchmarkUnit {
 	
 	
   public void readCommand(SocketChannel socket) throws Exception {
+	  //read the command
 	  ByteBuffer receiveBuffer = ByteBuffer.allocate(BUFFER);
 		String receivedString = null;	
 		int num = 0;
@@ -53,9 +57,11 @@ public abstract class BenchmarkUnit {
 				if (receivedString == null) {
 					receivedString = byteBufferToString(receiveBuffer);
 				} else {
+					//add the string which is received this time to the  receivedString.
 					receivedString = receivedString+byteBufferToString(receiveBuffer);
 				}
 				if (commandComplete(socket, receivedString)) {
+					//all the command string are received
 					num = 0;
 					receivedString = null;
 					if (stopReceiveUnit()) break;

@@ -1,15 +1,14 @@
 package com.cao.io;
 
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
-import java.io.PrintWriter;
+import java.io.InputStreamReader;
 import java.util.Properties;
 
 public class ABCommand implements Command {
     long startTime, stopTime;
     public String Throughput;
+    public static int portNum = 0;
     private Properties properties ;
     public ABCommand(Properties p) {
     	properties = p;
@@ -19,45 +18,36 @@ public class ABCommand implements Command {
     public boolean startCommand() {
         int r;
         try {
-        	String resultPath = basePath+"/"+date+"/"+date+properties.getProperty("messageSize")+"R"+".txt";
-        	String throughputPath = basePath+"/"+date+"/"+date+properties.getProperty("messageSize")+"T"+".txt";
+        	//prepare the command
         	int messageSum = Integer.parseInt(properties.getProperty("threadNumber")) * 1; //TODO
-        	String command = " ab -n "+messageSum+" -c "+properties.getProperty("threadNumber")+" -p "+properties.getProperty("messageSize")+".html -T text/plain -k -r http://"
-        	+properties.getProperty("serverAddress")+"/ "+"> "+resultPath;
+        	String address = properties.getProperty("serverAddress");
+        	String command = " ab -n "+messageSum+" -c "+properties.getProperty("threadNumber")+" -p "+basePath+"/"+date+"/"+properties.getProperty("messageSize")+".html -T text/plain -k -r http://"
+                	+address.split(":")[0]+":"+(Integer.parseInt(address.split(":")[1]))+"/ ";
         	
-            // generate a script file containing the command
-        	final File scriptFile = new File(basePath+"/"+date+"/abCommand.sh");
-        	PrintWriter w = new PrintWriter(scriptFile);
-        	w.println("#!/bin/sh");
-        	w.println("sleep 2");
-        	w.println("cd "+basePath+"/"+date);
-        	w.println(command);
-        	w.close();
+        	//sleep 2s to wait the ExperimentServer start 
+		    Thread.sleep(2000);
         	
         	startTime = System.currentTimeMillis();
+        	//execute the command
+        	Process p = Runtime.getRuntime().exec(command);
+        	r = p.waitFor();
         	
-        	r = executeStript(scriptFile);
-            
-            //get the throughput
-            String throughput = "awk '/total/ {print $1}' "+resultPath+"> "+throughputPath;
-            
-            final File throughputScriptFile = new File(basePath+"/"+date+"/result.sh");
-        	PrintWriter t = new PrintWriter(throughputScriptFile);
-        	t.println("#!/bin/sh");
-        	t.println(throughput);
-        	t.close();
-        	//make the script executable
-        	r = executeStript(throughputScriptFile);
-            
-            //put the property
-            File file = new File(throughputPath);
-            BufferedReader reader = new BufferedReader(new FileReader(file));
-            Throughput = reader.readLine();            
-            
-        } catch (IOException e) {
+        	//get the result(Throughput)
+        	BufferedReader output = getOutput(p);
+        	String line = "";
+        	while((line = output.readLine()) != null){
+        		System.out.println(line);
+        		if (line.contains("total")) {
+        			Throughput = line.trim().split(" ")[0];
+        		}
+        	}
+        	
+        } catch (IOException | InterruptedException e) {
             e.printStackTrace();
             return false;
         }
+        
+        //get the stopTime
         stopTime = System.currentTimeMillis();
         return r == 0;
     }
@@ -67,19 +57,10 @@ public class ABCommand implements Command {
         return false;
     }
 
-    public int executeStript(File scriptFile) {
-		int r = -1;
-		try {			   	
-			//make the script executable
-			Process p = Runtime.getRuntime().exec("chmod +x "+scriptFile.getAbsolutePath());
-			r = p.waitFor();
-			p = Runtime.getRuntime().exec(scriptFile.getAbsolutePath());
-			r = p.waitFor();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		return r;
-	}
+    public BufferedReader getOutput(Process p) {
+		return new BufferedReader(new InputStreamReader(p.getInputStream()));
+    	
+    }
 
 	@Override
 	public String getName() {
